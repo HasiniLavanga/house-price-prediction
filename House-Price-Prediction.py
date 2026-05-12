@@ -384,6 +384,333 @@ print(updated_sale_corr.head(20))
 # SAVE UPDATED DATASET
 # =====================================================
 df.to_csv("feature_engineered_housing_data.csv", index=False)
+
+# =====================================================
+# MODEL BUILDING & MACHINE LEARNING PIPELINE
+# =====================================================
+print("\n=================================================")
+print("MODEL BUILDING & MACHINE LEARNING PIPELINE")
+print("=================================================")
+# =====================================================
+# IMPORT MACHINE LEARNING LIBRARIES
+# =====================================================
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler
+)
+from sklearn.linear_model import (
+    LinearRegression,
+    Ridge,
+    Lasso
+)
+from sklearn.ensemble import (
+    RandomForestRegressor,
+    GradientBoostingRegressor
+)
+from sklearn.metrics import (
+    mean_squared_error,
+    r2_score
+)
+from sklearn.model_selection import (
+    cross_val_score,
+    KFold,
+    train_test_split
+)
+# =====================================================
+# UPDATED TRAIN TEST SPLIT
+# =====================================================
+print("\n✅ Updating Train-Test Split After Feature Engineering")
+X = df.drop(["SalePrice"], axis=1)
+y = df["SalePrice"]
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42
+)
+print("✅ Updated Training Shape:", X_train.shape)
+print("✅ Updated Testing Shape:", X_test.shape)
+# =====================================================
+# IDENTIFY COLUMN TYPES
+# =====================================================
+numeric_features = X.select_dtypes(
+    include=[np.number]
+).columns
+categorical_features = X.select_dtypes(
+    include=['object']
+).columns
+print("\n📌 Numerical Features:", len(numeric_features))
+print("📌 Categorical Features:", len(categorical_features))
+# =====================================================
+# NUMERICAL PIPELINE
+# =====================================================
+numeric_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="median")
+        ),
+
+        (
+            "scaler",
+            StandardScaler()
+        )
+    ]
+)
+# =====================================================
+# CATEGORICAL PIPELINE
+# =====================================================
+categorical_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="most_frequent")
+        ),
+
+        (
+            "encoder",
+            OneHotEncoder(
+                handle_unknown="ignore"
+            )
+        )
+    ]
+)
+# =====================================================
+# COLUMN TRANSFORMER
+# =====================================================
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "num",
+            numeric_transformer,
+            numeric_features
+        ),
+
+        (
+            "cat",
+            categorical_transformer,
+            categorical_features
+        )
+    ]
+)
+print("\n✅ Preprocessing Pipeline Created")
+# =====================================================
+# DEFINE MODELS
+# =====================================================
+models = {
+    "Linear Regression": LinearRegression(),
+    "Ridge Regression": Ridge(alpha=1.0),
+    "Lasso Regression": Lasso(alpha=0.001),
+    "Random Forest": RandomForestRegressor(
+        n_estimators=100,
+        random_state=42
+    ),
+    "Gradient Boosting": GradientBoostingRegressor(
+        n_estimators=100,
+        random_state=42
+    )
+}
+# =====================================================
+# MODEL TRAINING & EVALUATION
+# =====================================================
+results = []
+print("\n================ MODEL TRAINING ================")
+for model_name, model in models.items():
+    print(f"\n🚀 Training {model_name}")
+    pipeline = Pipeline(
+        steps=[
+            (
+                "preprocessor",
+                preprocessor
+            ),
+            (
+                "model",
+                model
+            )
+        ]
+    )
+    # =================================================
+    # TRAIN MODEL
+    # =================================================
+    pipeline.fit(
+        X_train,
+        np.log1p(y_train)
+    )
+    # =================================================
+    # PREDICTIONS
+    # =================================================
+    predictions = pipeline.predict(X_test)
+    # =================================================
+    # RMSE
+    # =================================================
+    rmse = np.sqrt(
+        mean_squared_error(
+            np.log1p(y_test),
+            predictions
+        )
+    )
+    # =================================================
+    # R2 SCORE
+    # =================================================
+    r2 = r2_score(
+        np.log1p(y_test),
+        predictions
+    )
+    print(f"✅ RMSE: {rmse:.4f}")
+    print(f"✅ R2 Score: {r2:.4f}")
+    # =================================================
+    # CROSS VALIDATION
+    # =================================================
+    cv = KFold(
+        n_splits=5,
+        shuffle=True,
+        random_state=42
+    )
+    cv_scores = cross_val_score(
+        pipeline,
+        X,
+        np.log1p(y),
+        cv=cv,
+        scoring='neg_root_mean_squared_error'
+    )
+    mean_cv_rmse = -cv_scores.mean()
+    print(f"✅ Cross Validation RMSE: {mean_cv_rmse:.4f}")
+    # =================================================
+    # STORE RESULTS
+    # =================================================
+    results.append({
+        "Model": model_name,
+        "RMSE": rmse,
+        "R2 Score": r2,
+        "CV RMSE": mean_cv_rmse
+    })
+# =====================================================
+# RESULTS DATAFRAME
+# =====================================================
+results_df = pd.DataFrame(results)
+print("\n================ MODEL COMPARISON ================")
+print(results_df)
+# =====================================================
+# MODEL COMPARISON GRAPH
+# =====================================================
+plt.figure(figsize=(10,6))
+sns.barplot(
+    data=results_df,
+    x="Model",
+    y="CV RMSE"
+)
+plt.title("Model Comparison - Cross Validation RMSE")
+plt.xticks(rotation=15)
+plt.ylabel("RMSE")
+plt.show()
+# =====================================================
+# BEST MODEL
+# =====================================================
+best_model = results_df.sort_values(
+    by="CV RMSE"
+).iloc[0]
+print("\n🏆 BEST MODEL")
+print(best_model)
+# =====================================================
+# RANDOM FOREST PIPELINE
+# =====================================================
+rf_pipeline = Pipeline(
+    steps=[
+        (
+            "preprocessor",
+            preprocessor
+        ),
+        (
+            "model",
+            RandomForestRegressor(
+                n_estimators=100,
+                random_state=42
+            )
+        )
+    ]
+)
+rf_pipeline.fit(
+    X_train,
+    np.log1p(y_train)
+)
+# =====================================================
+# LEARNING CURVE ANALYSIS
+# =====================================================
+train_sizes = []
+train_scores = []
+test_scores = []
+sizes = np.linspace(
+    0.1,
+    1.0,
+    5
+)
+for size in sizes:
+    subset_size = int(len(X_train) * size)
+    X_subset = X_train.iloc[:subset_size]
+    y_subset = np.log1p(
+        y_train.iloc[:subset_size]
+    )
+    rf_pipeline.fit(
+        X_subset,
+        y_subset
+    )
+    train_pred = rf_pipeline.predict(
+        X_subset
+    )
+    test_pred = rf_pipeline.predict(
+        X_test
+    )
+    train_rmse = np.sqrt(
+        mean_squared_error(
+            y_subset,
+            train_pred
+        )
+    )
+    test_rmse = np.sqrt(
+        mean_squared_error(
+            np.log1p(y_test),
+            test_pred
+        )
+    )
+    train_sizes.append(subset_size)
+    train_scores.append(train_rmse)
+    test_scores.append(test_rmse)
+# =====================================================
+# LEARNING CURVE GRAPH
+# =====================================================
+plt.figure(figsize=(10,6))
+plt.plot(
+    train_sizes,
+    train_scores,
+    marker='o',
+    label='Training RMSE'
+)
+plt.plot(
+    train_sizes,
+    test_scores,
+    marker='o',
+    label='Testing RMSE'
+)
+plt.title("Learning Curve Analysis")
+plt.xlabel("Training Size")
+plt.ylabel("RMSE")
+plt.legend()
+plt.show()
+# =====================================================
+# SAVE RESULTS
+# =====================================================
+results_df.to_csv(
+    "model_results.csv",
+    index=False
+)
+print("\n✅ Model Results Saved Successfully")
+# =====================================================
+# FINAL MESSAGE
+# =====================================================
+print("\n🎯 Model Building & Evaluation Completed Successfully")
 print("\n✅ Feature Engineered Dataset Saved Successfully")
 # =====================================================
 # FINAL MESSAGE
