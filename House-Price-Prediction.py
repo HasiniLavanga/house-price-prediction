@@ -711,6 +711,331 @@ print("\n✅ Model Results Saved Successfully")
 # FINAL MESSAGE
 # =====================================================
 print("\n🎯 Model Building & Evaluation Completed Successfully")
+# =====================================================
+# DAY 4 - XGBOOST & OPTUNA OPTIMIZATION
+# =====================================================
+print("\n=================================================")
+print("XGBOOST & OPTUNA HYPERPARAMETER OPTIMIZATION")
+print("=================================================")
+# =====================================================
+# IMPORT LIBRARIES
+# =====================================================
+import optuna
+from xgboost import XGBRegressor
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler
+)
+from sklearn.metrics import (
+    mean_squared_error,
+    r2_score
+)
+from sklearn.model_selection import (
+    train_test_split,
+    cross_val_score,
+    KFold
+)
+# =====================================================
+# REMOVE DATA LEAKAGE COLUMNS
+# =====================================================
+print("\n✅ Removing Leakage Columns")
+columns_to_remove = []
+if "SalePrice" in df.columns:
+    columns_to_remove.append("SalePrice")
+if "LogSalePrice" in df.columns:
+    columns_to_remove.append("LogSalePrice")
+X = df.drop(columns=columns_to_remove)
+y = np.log1p(df["SalePrice"])
+print("✅ Features Prepared Successfully")
+# =====================================================
+# TRAIN TEST SPLIT
+# =====================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42
+)
+print("✅ Train Test Split Completed")
+# =====================================================
+# IDENTIFY COLUMN TYPES
+# =====================================================
+numeric_features = X.select_dtypes(
+    include=[np.number]
+).columns
+categorical_features = X.select_dtypes(
+    include=['object']
+).columns
+print("\n📌 Numerical Features:", len(numeric_features))
+print("📌 Categorical Features:", len(categorical_features))
+# =====================================================
+# NUMERIC PIPELINE
+# =====================================================
+numeric_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="median")
+        ),
+        (
+            "scaler",
+            StandardScaler()
+        )
+    ]
+)
+# =====================================================
+# CATEGORICAL PIPELINE
+# =====================================================
+categorical_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="most_frequent")
+        ),
+        (
+            "encoder",
+            OneHotEncoder(
+                handle_unknown="ignore"
+            )
+        )
+    ]
+)
+# =====================================================
+# COLUMN TRANSFORMER
+# =====================================================
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "num",
+            numeric_transformer,
+            numeric_features
+        ),
+        (
+            "cat",
+            categorical_transformer,
+            categorical_features
+        )
+    ]
+)
+print("✅ Preprocessing Pipeline Created")
+# =====================================================
+# OPTUNA OBJECTIVE FUNCTION
+# =====================================================
+def objective(trial):
+    params = {
+        "n_estimators": trial.suggest_int(
+            "n_estimators",
+            50,
+            150
+        ),
+        "max_depth": trial.suggest_int(
+            "max_depth",
+            3,
+            8
+        ),
+        "learning_rate": trial.suggest_float(
+            "learning_rate",
+            0.01,
+            0.2
+        ),
+        "subsample": trial.suggest_float(
+            "subsample",
+            0.6,
+            1.0
+        ),
+        "colsample_bytree": trial.suggest_float(
+            "colsample_bytree",
+            0.6,
+            1.0
+        ),
+        "objective": "reg:squarederror",
+        "random_state": 42,
+        "verbosity": 0
+    }
+    model = XGBRegressor(**params)
+    pipeline = Pipeline(
+        steps=[
+            (
+                "preprocessor",
+                preprocessor
+            ),
+            (
+                "model",
+                model
+            )
+        ]
+    )
+    pipeline.fit(
+        X_train,
+        y_train
+    )
+    predictions = pipeline.predict(
+        X_test
+    )
+    rmse = np.sqrt(
+        mean_squared_error(
+            y_test,
+            predictions
+        )
+    )
+    return rmse
+# =====================================================
+# START OPTUNA STUDY
+# =====================================================
+print("\n🚀 Starting Hyperparameter Optimization")
+study = optuna.create_study(
+    direction="minimize"
+)
+# Faster execution
+study.optimize(
+    objective,
+    n_trials=5
+)
+print("\n✅ Optimization Completed")
+# =====================================================
+# BEST PARAMETERS
+# =====================================================
+print("\n================ BEST PARAMETERS ================")
+print(study.best_params)
+print("\n✅ Best RMSE:", study.best_value)
+# =====================================================
+# FINAL XGBOOST MODEL
+# =====================================================
+best_params = study.best_params
+best_params["objective"] = "reg:squarederror"
+best_params["random_state"] = 42
+best_params["verbosity"] = 0
+final_model = XGBRegressor(
+    **best_params
+)
+final_pipeline = Pipeline(
+    steps=[
+        (
+            "preprocessor",
+            preprocessor
+        ),
+        (
+            "model",
+            final_model
+        )
+    ]
+)
+# =====================================================
+# TRAIN FINAL MODEL
+# =====================================================
+print("\n🚀 Training Final XGBoost Model")
+final_pipeline.fit(
+    X_train,
+    y_train
+)
+# =====================================================
+# PREDICTIONS
+# =====================================================
+predictions = final_pipeline.predict(
+    X_test
+)
+# =====================================================
+# EVALUATION
+# =====================================================
+rmse = np.sqrt(
+    mean_squared_error(
+        y_test,
+        predictions
+    )
+)
+r2 = r2_score(
+    y_test,
+    predictions
+)
+print("\n================ FINAL MODEL PERFORMANCE ================")
+print("✅ RMSE:", rmse)
+print("✅ R2 Score:", r2)
+# =====================================================
+# CROSS VALIDATION
+# =====================================================
+cv = KFold(
+    n_splits=3,
+    shuffle=True,
+    random_state=42
+)
+cv_scores = cross_val_score(
+    final_pipeline,
+    X,
+    y,
+    cv=cv,
+    scoring='neg_root_mean_squared_error'
+)
+cv_rmse = -cv_scores.mean()
+print("✅ Cross Validation RMSE:", cv_rmse)
+# =====================================================
+# FEATURE IMPORTANCE
+# =====================================================
+print("\n================ FEATURE IMPORTANCE ================")
+xgb_model = final_pipeline.named_steps["model"]
+feature_importance = xgb_model.feature_importances_
+importance_df = pd.DataFrame({
+    "Feature Index": range(
+        len(feature_importance)
+    ),
+    "Importance": feature_importance
+})
+importance_df = importance_df.sort_values(
+    by="Importance",
+    ascending=False
+)
+print(importance_df.head(10))
+# =====================================================
+# FEATURE IMPORTANCE GRAPH
+# =====================================================
+plt.figure(figsize=(10,6))
+sns.barplot(
+    data=importance_df.head(10),
+    x="Importance",
+    y="Feature Index"
+)
+plt.title("Top 10 XGBoost Feature Importances")
+plt.savefig("xgboost_feature_importance.png")
+plt.close()
+print("✅ Feature Importance Graph Saved")
+# =====================================================
+# OPTUNA PARAMETER IMPORTANCE
+# =====================================================
+optuna_importance = optuna.importance.get_param_importances(
+    study
+)
+importance_names = list(
+    optuna_importance.keys()
+)
+importance_values = list(
+    optuna_importance.values()
+)
+plt.figure(figsize=(10,6))
+sns.barplot(
+    x=importance_values,
+    y=importance_names
+)
+plt.title("Optuna Hyperparameter Importance")
+plt.savefig("optuna_parameter_importance.png")
+plt.close()
+print("✅ Optuna Importance Graph Saved")
+# =====================================================
+# SAVE BEST PARAMETERS
+# =====================================================
+best_params_df = pd.DataFrame(
+    [study.best_params]
+)
+best_params_df.to_csv(
+    "best_xgboost_parameters.csv",
+    index=False
+)
+print("✅ Best Parameters Saved")
+# =====================================================
+# FINAL MESSAGE
+# =====================================================
+print("\n🎯 XGBoost & Hyperparameter Optimization Completed Successfully")
 print("\n✅ Feature Engineered Dataset Saved Successfully")
 # =====================================================
 # FINAL MESSAGE
