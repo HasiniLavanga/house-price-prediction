@@ -1036,6 +1036,263 @@ print("✅ Best Parameters Saved")
 # FINAL MESSAGE
 # =====================================================
 print("\n🎯 XGBoost & Hyperparameter Optimization Completed Successfully")
+# =====================================================
+# DAY 5 - SHAP EXPLAINABILITY ANALYSIS
+# =====================================================
+print("\n=================================================")
+print("SHAP EXPLAINABILITY ANALYSIS")
+print("=================================================")
+# =====================================================
+# IMPORT LIBRARIES
+# =====================================================
+import shap
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from xgboost import XGBRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler
+)
+# =====================================================
+# PREPARE DATA
+# =====================================================
+print("\n✅ Preparing Dataset")
+columns_to_remove = []
+if "SalePrice" in df.columns:
+    columns_to_remove.append("SalePrice")
+if "LogSalePrice" in df.columns:
+    columns_to_remove.append("LogSalePrice")
+X = df.drop(columns=columns_to_remove)
+y = np.log1p(df["SalePrice"])
+# =====================================================
+# TRAIN TEST SPLIT
+# =====================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42
+)
+print("✅ Train Test Split Completed")
+# =====================================================
+# FEATURE TYPES
+# =====================================================
+numeric_features = X.select_dtypes(
+    include=[np.number]
+).columns
+categorical_features = X.select_dtypes(
+    include=['object']
+).columns
+# =====================================================
+# NUMERIC PIPELINE
+# =====================================================
+numeric_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="median")
+        ),
+        (
+            "scaler",
+            StandardScaler()
+        )
+    ]
+)
+# =====================================================
+# CATEGORICAL PIPELINE
+# =====================================================
+categorical_transformer = Pipeline(
+    steps=[
+
+        (
+            "imputer",
+            SimpleImputer(strategy="most_frequent")
+        ),
+        (
+            "encoder",
+            OneHotEncoder(
+                handle_unknown="ignore"
+            )
+        )
+    ]
+)
+# =====================================================
+# PREPROCESSOR
+# =====================================================
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "num",
+            numeric_transformer,
+            numeric_features
+        ),
+        (
+            "cat",
+            categorical_transformer,
+            categorical_features
+        )
+    ]
+)
+print("✅ Preprocessing Pipeline Created")
+# =====================================================
+# PROCESS DATA
+# =====================================================
+X_train_processed = preprocessor.fit_transform(
+    X_train
+)
+X_test_processed = preprocessor.transform(
+    X_test
+)
+# =====================================================
+# CONVERT TO DENSE MATRIX
+# =====================================================
+X_train_processed = X_train_processed.toarray()
+X_test_processed = X_test_processed.toarray()
+print("✅ Data Processing Completed")
+# =====================================================
+# FEATURE NAMES
+# =====================================================
+feature_names = preprocessor.get_feature_names_out()
+# =====================================================
+# TRAIN XGBOOST MODEL
+# =====================================================
+print("\n🚀 Training XGBoost Model")
+model = XGBRegressor(
+    n_estimators=100,
+    max_depth=5,
+    learning_rate=0.05,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    objective="reg:squarederror",
+    random_state=42
+)
+model.fit(
+    X_train_processed,
+    y_train
+)
+print("✅ XGBoost Model Trained Successfully")
+# =====================================================
+# CREATE SHAP EXPLAINER
+# =====================================================
+print("\n🚀 Creating SHAP TreeExplainer")
+explainer = shap.TreeExplainer(model)
+shap_values = explainer.shap_values(
+    X_test_processed
+)
+print("✅ SHAP Values Generated Successfully")
+# =====================================================
+# SHAP FEATURE IMPORTANCE
+# =====================================================
+print("\n================ SHAP FEATURE IMPORTANCE ================")
+shap.summary_plot(
+    shap_values,
+    X_test_processed,
+    feature_names=feature_names,
+    show=False
+)
+plt.title("SHAP Feature Importance")
+plt.savefig(
+    "shap_feature_importance.png",
+    bbox_inches='tight'
+)
+plt.close()
+print("✅ SHAP Feature Importance Saved")
+# =====================================================
+# SHAP BEESWARM PLOT
+# =====================================================
+shap.summary_plot(
+    shap_values,
+    X_test_processed,
+    feature_names=feature_names,
+    plot_type="dot",
+    show=False
+)
+plt.title("SHAP Beeswarm Plot")
+plt.savefig(
+    "shap_beeswarm_plot.png",
+    bbox_inches='tight'
+)
+plt.close()
+print("✅ SHAP Beeswarm Plot Saved")
+# =====================================================
+# SHAP DEPENDENCE PLOTS
+# =====================================================
+print("\n================ SHAP DEPENDENCE PLOTS ================")
+top_features = np.argsort(
+    np.abs(shap_values).mean(0)
+)[-5:]
+for feature_index in top_features:
+    shap.dependence_plot(
+        feature_index,
+        shap_values,
+        X_test_processed,
+        feature_names=feature_names,
+        show=False
+    )
+    plt.savefig(
+        f"shap_dependence_{feature_index}.png",
+        bbox_inches='tight'
+    )
+    plt.close()
+print("✅ SHAP Dependence Plots Saved")
+# =====================================================
+# SHAP WATERFALL PLOT
+# =====================================================
+print("\n================ SHAP WATERFALL PLOT ================")
+sample_index = 0
+waterfall_explanation = shap.Explanation(
+    values=shap_values[sample_index],
+    base_values=explainer.expected_value,
+    data=X_test_processed[sample_index],
+    feature_names=feature_names
+)
+shap.waterfall_plot(
+    waterfall_explanation,
+    show=False
+)
+plt.savefig(
+    "shap_waterfall_plot.png",
+    bbox_inches='tight'
+)
+plt.close()
+print("✅ SHAP Waterfall Plot Saved")
+# =====================================================
+# SAMPLE PREDICTION
+# =====================================================
+prediction = model.predict(
+    X_test_processed[sample_index].reshape(1, -1)
+)
+actual_value = y_test.iloc[sample_index]
+print("\n================ SAMPLE PREDICTION ================")
+print("✅ Predicted Log Price:", prediction[0])
+print("✅ Actual Log Price:", actual_value)
+# =====================================================
+# SAVE SHAP SUMMARY
+# =====================================================
+shap_summary = pd.DataFrame({
+    "Feature": feature_names,
+    "Mean_SHAP_Value": np.abs(
+        shap_values
+    ).mean(axis=0)
+})
+shap_summary = shap_summary.sort_values(
+    by="Mean_SHAP_Value",
+    ascending=False
+)
+shap_summary.to_csv(
+    "shap_feature_summary.csv",
+    index=False
+)
+print("✅ SHAP Feature Summary Saved")
+# =====================================================
+# FINAL MESSAGE
+# =====================================================
+print("\n🎯 SHAP Explainability Analysis Completed Successfully")
 print("\n✅ Feature Engineered Dataset Saved Successfully")
 # =====================================================
 # FINAL MESSAGE
