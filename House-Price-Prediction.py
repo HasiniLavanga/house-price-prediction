@@ -1298,3 +1298,276 @@ print("\n✅ Feature Engineered Dataset Saved Successfully")
 # FINAL MESSAGE
 # =====================================================
 print("\n🎯 Feature Engineering & Data Preprocessing Completed Successfully")
+# =====================================================
+# DAY 6 - STREAMLIT HOUSE PRICE VALUATION APP
+# =====================================================
+# =====================================================
+# IMPORT LIBRARIES
+# =====================================================
+import streamlit as st
+import pandas as pd
+import numpy as np
+import joblib
+from xgboost import XGBRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler
+)
+# =====================================================
+# PAGE CONFIGURATION
+# =====================================================
+st.set_page_config(
+    page_title="House Price Prediction",
+    layout="wide"
+)
+# =====================================================
+# TITLE
+# =====================================================
+st.title("🏠 House Price Prediction & Valuation Tool")
+st.markdown(
+    "Predict house prices using Machine Learning & XGBoost"
+)
+# =====================================================
+# LOAD DATASET
+# =====================================================
+df = pd.read_csv("AmesHousing.csv")
+# =====================================================
+# REMOVE LEAKAGE COLUMNS
+# =====================================================
+columns_to_remove = []
+if "SalePrice" in df.columns:
+    columns_to_remove.append("SalePrice")
+if "LogSalePrice" in df.columns:
+    columns_to_remove.append("LogSalePrice")
+X = df.drop(columns=columns_to_remove)
+y = np.log1p(df["SalePrice"])
+# =====================================================
+# TRAIN TEST SPLIT
+# =====================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42
+)
+# =====================================================
+# IDENTIFY FEATURE TYPES
+# =====================================================
+numeric_features = X.select_dtypes(
+    include=[np.number]
+).columns
+
+categorical_features = X.select_dtypes(
+    include=['object']
+).columns
+# =====================================================
+# NUMERIC PIPELINE
+# =====================================================
+numeric_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="median")
+        ),
+        (
+            "scaler",
+            StandardScaler()
+        )
+    ]
+)
+# =====================================================
+# CATEGORICAL PIPELINE
+# =====================================================
+categorical_transformer = Pipeline(
+    steps=[
+        (
+            "imputer",
+            SimpleImputer(strategy="most_frequent")
+        ),
+        (
+            "encoder",
+            OneHotEncoder(
+                handle_unknown="ignore"
+            )
+        )
+    ]
+)
+# =====================================================
+# COLUMN TRANSFORMER
+# =====================================================
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "num",
+            numeric_transformer,
+            numeric_features
+        ),
+        (
+            "cat",
+            categorical_transformer,
+            categorical_features
+        )
+    ]
+)
+# =====================================================
+# XGBOOST MODEL
+# =====================================================
+model = XGBRegressor(
+    n_estimators=100,
+    max_depth=5,
+    learning_rate=0.05,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    objective="reg:squarederror",
+    random_state=42
+)
+# =====================================================
+# COMPLETE PIPELINE
+# =====================================================
+pipeline = Pipeline(
+    steps=[
+        (
+            "preprocessor",
+            preprocessor
+        ),
+        (
+            "model",
+            model
+        )
+    ]
+)
+# =====================================================
+# TRAIN MODEL
+# =====================================================
+pipeline.fit(
+    X_train,
+    y_train
+)
+# =====================================================
+# SAVE MODEL
+# =====================================================
+joblib.dump(
+    pipeline,
+    "house_price_model.pkl"
+)
+# =====================================================
+# USER INPUT SECTION
+# =====================================================
+st.sidebar.header("🏡 Enter Property Details")
+# =====================================================
+# IMPORTANT INPUT FEATURES
+# =====================================================
+overall_qual = st.sidebar.slider(
+    "Overall Quality",
+    1,
+    10,
+    5
+)
+gr_liv_area = st.sidebar.number_input(
+    "Ground Living Area",
+    500,
+    6000,
+    1500
+)
+garage_cars = st.sidebar.slider(
+    "Garage Cars",
+    0,
+    5,
+    2
+)
+garage_area = st.sidebar.number_input(
+    "Garage Area",
+    0,
+    1500,
+    500
+)
+total_bsmt_sf = st.sidebar.number_input(
+    "Total Basement Area",
+    0,
+    4000,
+    800
+)
+year_built = st.sidebar.slider(
+    "Year Built",
+    1900,
+    2025,
+    2000
+)
+full_bath = st.sidebar.slider(
+    "Full Bathrooms",
+    0,
+    5,
+    2
+)
+totrms_abvgrd = st.sidebar.slider(
+    "Total Rooms Above Ground",
+    2,
+    15,
+    7
+)
+# =====================================================
+# CREATE INPUT DATAFRAME
+# =====================================================
+input_data = pd.DataFrame({
+    "Overall Qual": [overall_qual],
+    "Gr Liv Area": [gr_liv_area],
+    "Garage Cars": [garage_cars],
+    "Garage Area": [garage_area],
+    "Total Bsmt SF": [total_bsmt_sf],
+    "Year Built": [year_built],
+    "Full Bath": [full_bath],
+    "TotRms AbvGrd": [totrms_abvgrd]
+})
+# =====================================================
+# ADD MISSING COLUMNS
+# =====================================================
+for col in X.columns:
+    if col not in input_data.columns:
+        if col in numeric_features:
+            input_data[col] = X[col].median()
+        else:
+            input_data[col] = X[col].mode()[0]
+# =====================================================
+# REORDER COLUMNS
+# =====================================================
+input_data = input_data[X.columns]
+# =====================================================
+# PREDICTION BUTTON
+# =====================================================
+if st.button("Predict House Price"):
+    prediction_log = pipeline.predict(
+        input_data
+    )
+    prediction_price = np.expm1(
+        prediction_log[0]
+    )
+    st.success(
+        f"🏠 Estimated House Price: ${prediction_price:,.2f}"
+    )
+    # =================================================
+    # DISPLAY INPUT FEATURES
+    # =================================================
+    st.subheader("📋 Property Details")
+    st.dataframe(input_data)
+# =====================================================
+# PROJECT INFORMATION
+# =====================================================
+st.markdown("---")
+st.subheader("📊 Model Information")
+st.write(
+    """
+    This application predicts house prices using:
+    - XGBoost Regression
+    - Feature Engineering
+    - Data Preprocessing Pipelines
+    - Machine Learning Regression Techniques
+    """
+)
+# =====================================================
+# FINAL MESSAGE
+# =====================================================
+print("\n🎯 Streamlit House Valuation App Ready Successfully")
