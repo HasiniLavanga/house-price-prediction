@@ -1,38 +1,19 @@
 import streamlit as st
 
-st.set_page_config(page_title="House Price Prediction", layout="centered")
+st.set_page_config(page_title="House Price Prediction")
 
 st.title("🏠 House Price Prediction & Valuation Tool")
 
-st.write("Predict estimated house prices using house features.")
-
 st.sidebar.header("Enter House Details")
 
-overall_qual = st.sidebar.slider("Overall Quality", 1, 10, 5)
-gr_liv_area = st.sidebar.number_input("Ground Living Area (sq ft)", 500, 5000, 1500)
-garage_cars = st.sidebar.slider("Garage Capacity", 0, 5, 2)
-total_bsmt_sf = st.sidebar.number_input("Basement Area", 0, 3000, 800)
-year_built = st.sidebar.slider("Year Built", 1900, 2025, 2005)
+quality = st.sidebar.slider("Overall Quality", 1, 10, 5)
+area = st.sidebar.number_input("Living Area", 500, 5000, 1500)
+garage = st.sidebar.slider("Garage Cars", 0, 5, 2)
 
-if st.button("Predict House Price"):
+if st.button("Predict Price"):
 
-    estimated_price = (
-        overall_qual * 50000
-        + gr_liv_area * 120
-        + garage_cars * 10000
-        + total_bsmt_sf * 35
-        + (year_built - 2000) * 1500
-    )
+    price = quality * 50000 + area * 100 + garage * 10000
 
-    st.success(f"🏡 Estimated House Price: ${estimated_price:,.2f}")
+    st.success(f"Estimated House Price: ${price:,.2f}")
 
-    st.subheader("📊 Input Summary")
-
-    st.write(f"Overall Quality: {overall_qual}")
-    st.write(f"Living Area: {gr_liv_area} sq ft")
-    st.write(f"Garage Capacity: {garage_cars}")
-    st.write(f"Basement Area: {total_bsmt_sf} sq ft")
-    st.write(f"Year Built: {year_built}")
-
-st.markdown("---")
-st.caption("Machine Learning House Price Prediction Project")
+st.write("Interactive Streamlit Deployment Successful ✅")
